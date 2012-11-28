@@ -1,9 +1,12 @@
 ko.utils = new (function () {
     var stringTrimRegex = /^(\s|\u00A0)+|(\s|\u00A0)+$/g;
 
+    // get access to the global object in a universal way (i.e. works out-of-browser)
+    var global = (function() { return this; }).call();
+
     // Represent the known event types in a compact way, then at runtime transform it into a hash with event name as key (for fast lookup)
     var knownEvents = {}, knownEventTypesByEventName = {};
-    var keyEventTypeName = /Firefox\/2/i.test(navigator.userAgent) ? 'KeyboardEvent' : 'UIEvents';
+    var keyEventTypeName = /Firefox\/2/i.test(global.navigator && navigator.userAgent) ? 'KeyboardEvent' : 'UIEvents';
     knownEvents[keyEventTypeName] = ['keyup', 'keydown', 'keypress'];
     knownEvents['MouseEvents'] = ['click', 'dblclick', 'mousedown', 'mouseup', 'mousemove', 'mouseover', 'mouseout', 'mouseenter', 'mouseleave'];
     for (var eventType in knownEvents) {
@@ -19,7 +22,7 @@ ko.utils = new (function () {
     // Note that, since IE 10 does not support conditional comments, the following logic only detects IE < 10.
     // Currently this is by design, since IE 10+ behaves correctly when treated as a standard browser.
     // If there is a future need to detect specific versions of IE10+, we will amend this.
-    var ieVersion = (function() {
+    var ieVersion = !global.document ? undefined : (function() {
         var version = 3, div = document.createElement('div'), iElems = div.getElementsByTagName('i');
 
         // Keep constructing conditional HTML blocks until we hit one that resolves to an empty fragment

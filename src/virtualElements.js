@@ -7,10 +7,13 @@
     // The point of all this is to support containerless templates (e.g., <!-- ko foreach:someCollection -->blah<!-- /ko -->)
     // without having to scatter special cases all over the binding and templating code.
 
+    // get access to the global object in a universal way (i.e. works out-of-browser)
+    var global = (function() { return this; }).call();
+
     // IE 9 cannot reliably read the "nodeValue" property of a comment node (see https://github.com/SteveSanderson/knockout/issues/186)
     // but it does give them a nonstandard alternative property called "text" that it can read reliably. Other browsers don't have that property.
     // So, use node.text where available, and node.nodeValue elsewhere
-    var commentNodesHaveTextProperty = document.createComment("test").text === "<!--test-->";
+    var commentNodesHaveTextProperty = global.document && document.createComment("test").text === "<!--test-->";
 
     var startCommentRegex = commentNodesHaveTextProperty ? /^<!--\s*ko(?:\s+(.+\s*\:[\s\S]*))?\s*-->$/ : /^\s*ko(?:\s+(.+\s*\:[\s\S]*))?\s*$/;
     var endCommentRegex =   commentNodesHaveTextProperty ? /^<!--\s*\/ko\s*-->$/ : /^\s*\/ko\s*$/;
