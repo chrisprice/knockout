@@ -1,7 +1,7 @@
 (function () {
     var leadingCommentRegex = /^(\s*)<!--(.*?)-->/;
 
-    function simpleHtmlParse(html) {
+    function simpleHtmlParse(html, doc) {
         // Based on jQuery's "clean" function, but only accounting for table-related elements.
         // If you have referenced jQuery, this won't be used anyway - KO will use jQuery's "clean" function directly
 
@@ -11,7 +11,7 @@
         // (possibly a text node) in front of the comment. So, KO does not attempt to workaround this IE issue automatically at present.
 
         // Trim whitespace, otherwise indexOf won't work as expected
-        var tags = ko.utils.stringTrim(html).toLowerCase(), div = document.createElement("div");
+        var tags = ko.utils.stringTrim(html).toLowerCase(), div = doc.createElement("div");
 
         // Finds the first match from the left column, and returns the corresponding "wrap" data from the right column
         var wrap = tags.match(/^<(thead|tbody|tfoot)/)              && [1, "<table>", "</table>"] ||
@@ -35,13 +35,13 @@
         return ko.utils.makeArray(div.lastChild.childNodes);
     }
 
-    function jQueryHtmlParse(html) {
+    function jQueryHtmlParse(html, doc) {
         // jQuery's "parseHTML" function was introduced in jQuery 1.8.0 and is a documented public API.
         if (jQuery['parseHTML']) {
-            return jQuery['parseHTML'](html) || []; // Ensure we always return an array and never null
+            return jQuery['parseHTML'](html, doc) || []; // Ensure we always return an array and never null
         } else {
             // For jQuery < 1.8.0, we fall back on the undocumented internal "clean" function.
-            var elems = jQuery['clean']([html]);
+            var elems = jQuery['clean']([html], doc);
 
             // As of jQuery 1.7.1, jQuery parses the HTML by appending it to some dummy parent nodes held in an in-memory document fragment.
             // Unfortunately, it never clears the dummy parent nodes from the document fragment, so it leaks memory over time.
@@ -60,9 +60,10 @@
         }
     }
 
-    ko.utils.parseHtmlFragment = function(html) {
-        return typeof jQuery != 'undefined' ? jQueryHtmlParse(html)   // As below, benefit from jQuery's optimisations where possible
-                                            : simpleHtmlParse(html);  // ... otherwise, this simple logic will do in most common cases.
+    ko.utils.parseHtmlFragment = function(html, doc) {
+        doc = doc || document;
+        return typeof jQuery != 'undefined' ? jQueryHtmlParse(html, doc)   // As below, benefit from jQuery's optimisations where possible
+                                            : simpleHtmlParse(html, doc);  // ... otherwise, this simple logic will do in most common cases.
     };
 
     ko.utils.setHtml = function(node, html) {
@@ -82,7 +83,7 @@
                 jQuery(node)['html'](html);
             } else {
                 // ... otherwise, use KO's own parsing logic.
-                var parsedNodes = ko.utils.parseHtmlFragment(html);
+                var parsedNodes = ko.utils.parseHtmlFragment(html, node.ownerDocument);
                 for (var i = 0; i < parsedNodes.length; i++)
                     node.appendChild(parsedNodes[i]);
             }
