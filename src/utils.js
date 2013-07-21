@@ -1,6 +1,4 @@
 ko.utils = (function () {
-    var stringTrimRegex = /^(\s|\u00A0)+|(\s|\u00A0)+$/g;
-
     var objectForEach = function(obj, action) {
         for (var prop in obj) {
             if (obj.hasOwnProperty(prop)) {
@@ -33,7 +31,7 @@ ko.utils = (function () {
         while (
             div.innerHTML = '<!--[if gt IE ' + (++version) + ']><i></i><![endif]-->',
             iElems[0]
-        );
+        ) {}
         return version > 4 ? version : undefined;
     }());
     var isIe6 = ieVersion === 6,
@@ -113,7 +111,7 @@ ko.utils = (function () {
         },
 
         addOrRemoveItem: function(array, value, included) {
-            var existingEntryIndex = array.indexOf ? array.indexOf(value) : ko.utils.arrayIndexOf(array, value);
+            var existingEntryIndex = ko.utils.arrayIndexOf(ko.utils.peekObservable(array), value);
             if (existingEntryIndex < 0) {
                 if (included)
                     array.push(value);
@@ -135,6 +133,18 @@ ko.utils = (function () {
         },
 
         objectForEach: objectForEach,
+
+        objectMap: function(source, mapping) {
+            if (!source)
+                return source;
+            var target = {};
+            for (var prop in source) {
+                if (source.hasOwnProperty(prop)) {
+                    target[prop] = mapping(source[prop], prop, source);
+                }
+            }
+            return target;
+        },
 
         emptyDomNode: function (domNode) {
             while (domNode.firstChild) {
@@ -183,6 +193,45 @@ ko.utils = (function () {
             }
         },
 
+        fixUpContinuousNodeArray: function(continuousNodeArray, parentNode) {
+            // Before acting on a set of nodes that were previously outputted by a template function, we have to reconcile
+            // them against what is in the DOM right now. It may be that some of the nodes have already been removed, or that
+            // new nodes might have been inserted in the middle, for example by a binding. Also, there may previously have been
+            // leading comment nodes (created by rewritten string-based templates) that have since been removed during binding.
+            // So, this function translates the old "map" output array into its best guess of the set of current DOM nodes.
+            //
+            // Rules:
+            //   [A] Any leading nodes that have been removed should be ignored
+            //       These most likely correspond to memoization nodes that were already removed during binding
+            //       See https://github.com/SteveSanderson/knockout/pull/440
+            //   [B] We want to output a continuous series of nodes. So, ignore any nodes that have already been removed,
+            //       and include any nodes that have been inserted among the previous collection
+
+            if (continuousNodeArray.length) {
+                // The parent node can be a virtual element; so get the real parent node
+                parentNode = (parentNode.nodeType === 8 && parentNode.parentNode) || parentNode;
+
+                // Rule [A]
+                while (continuousNodeArray.length && continuousNodeArray[0].parentNode !== parentNode)
+                    continuousNodeArray.splice(0, 1);
+
+                // Rule [B]
+                if (continuousNodeArray.length > 1) {
+                    var current = continuousNodeArray[0], last = continuousNodeArray[continuousNodeArray.length - 1];
+                    // Replace with the actual new continuous node set
+                    continuousNodeArray.length = 0;
+                    while (current !== last) {
+                        continuousNodeArray.push(current);
+                        current = current.nextSibling;
+                        if (!current) // Won't happen, except if the developer has manually removed some DOM elements (then we're in an undefined scenario)
+                            return;
+                    }
+                    continuousNodeArray.push(last);
+                }
+            }
+            return continuousNodeArray;
+        },
+
         setOptionNodeSelectionState: function (optionNode, isSelected) {
             // IE6 sometimes throws "unknown error" if you try to write to .selected directly, whereas Firefox struggles with setAttribute. Pick one based on browser.
             if (ieVersion < 7)
@@ -192,7 +241,10 @@ ko.utils = (function () {
         },
 
         stringTrim: function (string) {
-            return (string || "").replace(stringTrimRegex, "");
+            return string === null || string === undefined ? '' :
+                string.trim ?
+                    string.trim() :
+                    string.toString().replace(/^[\s\xa0]+|[\s\xa0]+$/g, '');
         },
 
         stringTokenize: function (string, delimiter) {
@@ -259,11 +311,17 @@ ko.utils = (function () {
                 jQuery(element)['bind'](eventType, handler);
             } else if (!mustUseAttachEvent && typeof element.addEventListener == "function")
                 element.addEventListener(eventType, handler, false);
-            else if (typeof element.attachEvent != "undefined")
-                element.attachEvent("on" + eventType, function (event) {
-                    handler.call(element, event);
+            else if (typeof element.attachEvent != "undefined") {
+                var attachEventHandler = function (event) { handler.call(element, event); },
+                    attachEventName = "on" + eventType;
+                element.attachEvent(attachEventName, attachEventHandler);
+
+                // IE does not dispose attachEvent handlers automatically (unlike with addEventListener)
+                // so to avoid leaks, we have to remove them manually. See bug #856
+                ko.utils.domNodeDisposal.addDisposeCallback(element, function() {
+                    element.detachEvent(attachEventName, attachEventHandler);
                 });
-            else
+            } else
                 throw new Error("Browser doesn't support addEventListener or attachEvent");
         },
 
@@ -322,21 +380,17 @@ ko.utils = (function () {
             if ((value === null) || (value === undefined))
                 value = "";
 
-            if (element.nodeType === 3) {
-                element.data = value;
+            // We need there to be exactly one child: a text node.
+            // If there are no children, more than one, or if it's not a text node,
+            // we'll clear everything and create a single text node.
+            var innerTextNode = ko.virtualElements.firstChild(element);
+            if (!innerTextNode || innerTextNode.nodeType != 3 || ko.virtualElements.nextSibling(innerTextNode)) {
+                ko.virtualElements.setDomNodeChildren(element, [document.createTextNode(value)]);
             } else {
-                // We need there to be exactly one child: a text node.
-                // If there are no children, more than one, or if it's not a text node,
-                // we'll clear everything and create a single text node.
-                var innerTextNode = ko.virtualElements.firstChild(element);
-                if (!innerTextNode || innerTextNode.nodeType != 3 || ko.virtualElements.nextSibling(innerTextNode)) {
-                    ko.virtualElements.setDomNodeChildren(element, [document.createTextNode(value)]);
-                } else {
-                    innerTextNode.data = value;
-                }
-
-                ko.utils.forceRefresh(element);
+                innerTextNode.data = value;
             }
+
+            ko.utils.forceRefresh(element);
         },
 
         setElementName: function(element, name) {
@@ -366,7 +420,8 @@ ko.utils = (function () {
         ensureSelectElementIsRenderedCorrectly: function(selectElement) {
             // Workaround for IE9 rendering bug - it doesn't reliably display all the text in dynamically-added select boxes unless you force it to re-render by updating the width.
             // (See https://github.com/SteveSanderson/knockout/issues/312, http://stackoverflow.com/questions/5908494/select-only-shows-first-char-of-selected-option)
-            if (ieVersion >= 9) {
+            // Also fixes IE7 and IE8 bug that causes selects to be zero width if enclosed by 'if' or 'with'. (See issue #839)
+            if (ieVersion) {
                 var originalWidth = selectElement.style.width;
                 selectElement.style.width = 0;
                 selectElement.style.width = originalWidth;
@@ -490,6 +545,7 @@ ko.exportSymbol('utils.triggerEvent', ko.utils.triggerEvent);
 ko.exportSymbol('utils.unwrapObservable', ko.utils.unwrapObservable);
 ko.exportSymbol('utils.objectForEach', ko.utils.objectForEach);
 ko.exportSymbol('utils.addOrRemoveItem', ko.utils.addOrRemoveItem);
+ko.exportSymbol('unwrap', ko.utils.unwrapObservable); // Convenient shorthand, because this is used so commonly
 
 if (!Function.prototype['bind']) {
     // Function.prototype.bind is a standard part of ECMAScript 5th Edition (December 2009, http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-262.pdf)

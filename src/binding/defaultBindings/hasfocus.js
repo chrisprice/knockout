@@ -1,7 +1,7 @@
 var hasfocusUpdatingProperty = '__ko_hasfocusUpdating';
 var hasfocusLastValue = '__ko_hasfocusLastValue';
 ko.bindingHandlers['hasfocus'] = {
-    'init': function(element, valueAccessor, allBindingsAccessor) {
+    'init': function(element, valueAccessor, allBindings) {
         var handleElementFocusChange = function(isFocused) {
             // Where possible, ignore which event was raised and determine focus state using activeElement,
             // as this avoids phantom focus/blur events raised when changing tabs in modern browsers.
@@ -12,10 +12,17 @@ ko.bindingHandlers['hasfocus'] = {
             element[hasfocusUpdatingProperty] = true;
             var ownerDoc = element.ownerDocument;
             if ("activeElement" in ownerDoc) {
-                isFocused = (ownerDoc.activeElement === element);
+                var active;
+                try {
+                    active = ownerDoc.activeElement;
+                } catch(e) {
+                    // IE9 throws if you access activeElement during page load (see issue #703)
+                    active = ownerDoc.body;
+                }
+                isFocused = (active === element);
             }
             var modelValue = valueAccessor();
-            ko.expressionRewriting.writeValueToProperty(modelValue, allBindingsAccessor, 'hasfocus', isFocused, true);
+            ko.expressionRewriting.writeValueToProperty(modelValue, allBindings, 'hasfocus', isFocused, true);
 
             //cache the latest value, so we can avoid unnecessarily calling focus/blur in the update function
             element[hasfocusLastValue] = isFocused;
@@ -37,5 +44,7 @@ ko.bindingHandlers['hasfocus'] = {
         }
     }
 };
+ko.expressionRewriting.twoWayBindings['hasfocus'] = true;
 
 ko.bindingHandlers['hasFocus'] = ko.bindingHandlers['hasfocus']; // Make "hasFocus" an alias
+ko.expressionRewriting.twoWayBindings['hasFocus'] = true;
