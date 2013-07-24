@@ -19,4 +19,7 @@ describe('DOM manipulation utils', function() {
         popup.close();
     });
 
+  //TODO: setHTML?
+  //TODO: getDocument?
+
 });
