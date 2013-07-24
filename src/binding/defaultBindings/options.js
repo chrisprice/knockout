@@ -72,7 +72,8 @@ ko.bindingHandlers['options'] = {
                 previousSelectedValues = oldOptions[0].selected ? [ ko.selectExtensions.readValue(oldOptions[0]) ] : [];
                 itemUpdate = true;
             }
-            var option = document.createElement("option");
+            var doc = element.ownerDocument || document;
+            var option = doc.createElement("option");
             if (arrayEntry === captionPlaceholder) {
                 ko.utils.setHtml(option, allBindings.get('optionsCaption'));
                 ko.selectExtensions.writeValue(option, undefined);
