@@ -157,7 +157,8 @@ ko.utils = (function () {
             // we don't want the underlying collection to change while we're doing that.
             var nodesArray = ko.utils.makeArray(nodes);
 
-            var container = document.createElement('div');
+            var doc = nodesArray[0] ? nodesArray[0].ownerDocument : document;
+            var container = doc.createElement('div');
             for (var i = 0, j = nodesArray.length; i < j; i++) {
                 container.appendChild(ko.cleanNode(nodesArray[i]));
             }
