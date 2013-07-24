@@ -37,7 +37,6 @@ ko.templateEngine.prototype['createJavaScriptEvaluatorBlock'] = function (script
 ko.templateEngine.prototype['makeTemplateSource'] = function(template, templateDocument) {
     // Named template
     if (typeof template == "string") {
-        templateDocument = templateDocument || document;
         var elem = templateDocument.getElementById(template);
         if (!elem)
             throw new Error("Cannot find template with ID " + template);
@@ -51,7 +50,7 @@ ko.templateEngine.prototype['makeTemplateSource'] = function(template, templateD
 
 ko.templateEngine.prototype['renderTemplate'] = function (template, bindingContext, options, templateDocument) {
     var templateSource = this['makeTemplateSource'](template, templateDocument);
-    return this['renderTemplateSource'](templateSource, bindingContext, options);
+    return this['renderTemplateSource'](templateSource, bindingContext, options, templateDocument);
 };
 
 ko.templateEngine.prototype['isTemplateRewritten'] = function (template, templateDocument) {
